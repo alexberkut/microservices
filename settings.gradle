@@ -1,0 +1,12 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url 'https://repo.spring.io/snapshot' }
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'microservices'
+
+include 'resource-service'
+include 'song-service'

@@ -1,0 +1,15 @@
+plugins {
+    id 'org.springframework.boot' version '3.4.0-SNAPSHOT' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
+    id 'java'
+}
+
+allprojects {
+    group = 'com.epam'
+    version = '0.0.1-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+        maven { url 'https://repo.spring.io/snapshot' }
+    }
+}
