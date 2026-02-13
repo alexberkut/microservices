@@ -3,7 +3,9 @@ package com.epam.resourceservice.service;
 import com.epam.resourceservice.client.SongServiceClient;
 import com.epam.resourceservice.dto.SongDto;
 import com.epam.resourceservice.entity.Resource;
+import com.epam.resourceservice.exception.ResourceNotFoundException;
 import com.epam.resourceservice.repository.ResourceRepository;
+import com.epam.resourceservice.validation.ResourceValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.metadata.Metadata;
@@ -25,6 +27,7 @@ public class ResourceService {
 
     private final ResourceRepository resourceRepository;
     private final SongServiceClient songServiceClient;
+    private final ResourceValidator resourceValidator;
 
     @Transactional
     public Long saveResource(byte[] data) {
@@ -35,34 +38,31 @@ public class ResourceService {
         return savedResource.getId();
     }
 
-    public Resource getResource(Long id) {
-        return resourceRepository.findById(id).orElse(null);
+    public Resource getResource(String id) {
+        resourceValidator.validateId(id);
+        var resourceId = Long.parseLong(id);
+        return resourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException(String.format("Resource with ID=%s not found", id)));
     }
 
     @Transactional
     public List<Long> deleteResources(String ids) {
-        List<Long> idList = Arrays.stream(ids.split(","))
+        resourceValidator.validateIds(ids);
+        var idList = Arrays.stream(ids.split(","))
+                .map(String::trim)
                 .map(Long::parseLong)
                 .toList();
 
-        List<Resource> resourcesToDelete = resourceRepository.findAllById(idList);
-        List<Long> deletedIds = resourcesToDelete.stream()
-                .map(Resource::getId)
-                .toList();
+        var resourcesToDelete = resourceRepository.findAllById(idList);
+        var deletedIds = resourcesToDelete.stream().map(Resource::getId).toList();
 
-        if (deletedIds.isEmpty()) {
-            log.info("No resources found for the given IDs. Nothing to delete.");
-            return List.of();
+        if (!deletedIds.isEmpty()) {
+            resourceRepository.deleteAll(resourcesToDelete);
+            var deletedIdsString = deletedIds.stream().map(String::valueOf).collect(Collectors.joining(","));
+            songServiceClient.deleteSongMetadata(deletedIdsString);
+            log.info("Successfully deleted resources with IDs: {}", deletedIds);
         }
 
-        resourceRepository.deleteAll(resourcesToDelete);
-
-        String deletedIdsString = deletedIds.stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(","));
-        songServiceClient.deleteSongMetadata(deletedIdsString);
-
-        log.info("Successfully deleted resources with IDs: {}", deletedIds);
         return deletedIds;
     }
 
@@ -83,15 +83,13 @@ public class ResourceService {
                 duration = String.format("%02d:%02d", minutes, remainingSeconds);
             }
 
-            var songDto = new SongDto(
-                    id,
-                    metadata.get("dc:title"),
-                    metadata.get("xmpDM:artist"),
-                    metadata.get("xmpDM:album"),
-                    duration,
-                    metadata.get("xmpDM:releaseDate")
-            );
+            var year = "";
+            var releaseDate = metadata.get("xmpDM:releaseDate");
+            if (releaseDate != null && releaseDate.length() >= 4) {
+                year = releaseDate.substring(0, 4);
+            }
 
+            var songDto = new SongDto(id, metadata.get("dc:title"), metadata.get("xmpDM:artist"), metadata.get("xmpDM:album"), duration, year);
             songServiceClient.createSongMetadata(songDto);
         } catch (Exception e) {
             log.error("Error processing and sending metadata: {}. sendMetadataToSongService: id={}", e.getMessage(), id, e);

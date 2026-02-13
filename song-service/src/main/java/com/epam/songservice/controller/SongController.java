@@ -2,8 +2,8 @@ package com.epam.songservice.controller;
 
 import com.epam.songservice.dto.CreateSongResponseDto;
 import com.epam.songservice.dto.DeleteSongResponseDto;
-import com.epam.songservice.entity.Song;
-import com.epam.songservice.exception.SongNotFoundException;
+import com.epam.songservice.dto.SongRequestDto;
+import com.epam.songservice.dto.SongResponseDto;
 import com.epam.songservice.service.SongService;
 import com.epam.songservice.validation.ValidationSequence;
 import lombok.RequiredArgsConstructor;
@@ -21,8 +21,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Arrays;
-
 @RestController
 @RequestMapping(value = "/songs", produces = MediaType.APPLICATION_JSON_VALUE)
 @Slf4j
@@ -33,57 +31,22 @@ public class SongController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.OK)
-    public CreateSongResponseDto createSong(@Validated(ValidationSequence.class) @RequestBody Song song) {
-        log.info("createSong: song={}", song);
-        var id = songService.saveSong(song);
-        if (id == null) {
-            throw new IllegalStateException("Metadata for resource ID=%d already exists".formatted(song.getId()));
-        }
+    public CreateSongResponseDto createSong(@Validated(ValidationSequence.class) @RequestBody SongRequestDto songRequestDto) {
+        log.info("createSong: songRequestDto={}", songRequestDto);
+        var id = songService.saveSong(songRequestDto);
         return new CreateSongResponseDto(id);
     }
 
     @GetMapping("/{id}")
-    public Song getSong(@PathVariable String id) {
+    public SongResponseDto getSong(@PathVariable String id) {
         log.info("getSong: id={}", id);
-        long songId;
-        try {
-            songId = Long.parseLong(id);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Invalid value '%s' for ID. Must be a positive integer".formatted(id));
-        }
-        if (songId <= 0) {
-            throw new IllegalArgumentException("Invalid value '%s' for ID. Must be a positive integer".formatted(id));
-        }
-
-        var song = songService.getSong(songId);
-        if (song == null) {
-            throw new SongNotFoundException(String.format("Song metadata for ID=%s not found", songId));
-        }
-        return song;
+        return songService.getSong(id);
     }
 
     @DeleteMapping
     @ResponseStatus(HttpStatus.OK)
     public DeleteSongResponseDto deleteSongs(@RequestParam String id) {
-        log.info("deleteSongs: id={}", id);
-        if (id.length() > 200) {
-            throw new IllegalArgumentException("CSV string is too long: received %d characters, maximum allowed is 200".formatted(id.length()));
-        }
-        Arrays.stream(id.split(","))
-                .forEach(idStr -> {
-                    long num;
-                    try {
-                        num = Long.parseLong(idStr);
-                    } catch (NumberFormatException e) {
-                        var msg = String.format("Invalid ID format: '%s'. Only positive integers are allowed", idStr);
-                        throw new IllegalArgumentException(msg);
-                    }
-                    if (num <= 0) {
-                        var msg = String.format("Invalid ID format: '%s'. Only positive integers are allowed", idStr);
-                        throw new IllegalArgumentException(msg);
-                    }
-                });
-
+        log.info("deleteSongs: id='{}'", id);
         var deletedIds = songService.deleteSongs(id);
         return new DeleteSongResponseDto(deletedIds);
     }
