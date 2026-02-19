@@ -1,30 +1,63 @@
+version: '3.8'
+
 services:
-  resource-db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: resource-db
-      POSTGRES_USER: postgres  # Default, can be omitted if unchanged
-      POSTGRES_PASSWORD: postgres
+  resource-service:
+    build:
+      context: .
+      dockerfile: resource-service/Dockerfile
     ports:
-      - "5432:5432"  # Maps container port 5432 to host port 5432
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=${RESOURCE_DB_URL}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - SONG_SERVICE_URL=${SONG_SERVICE_URL}
+    depends_on:
+      resource-db:
+        condition: service_healthy
+
+  song-service:
+    build:
+      context: .
+      dockerfile: song-service/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=${SONG_DB_URL}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      song-db:
+        condition: service_healthy
+
+  resource-db:
+    image: postgres:alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${RESOURCE_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./init-scripts/resource-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   song-db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: song-db
-      POSTGRES_USER: postgres  # Default, can be omitted if unchanged
-      POSTGRES_PASSWORD: postgres
+    image: postgres:alpine
     ports:
-      - "5433:5432"  # Maps container port 5432 to host port 5433 (to avoid conflict)
-
-# Related settings for application.properties:
-#
-# For resource-service:
-# spring.datasource.url=jdbc:postgresql://localhost:5432/resource-db
-# spring.datasource.username=postgres
-# spring.datasource.password=postgres
-#
-# For song-service:
-# spring.datasource.url=jdbc:postgresql://localhost:5433/song-db
-# spring.datasource.username=postgres
-# spring.datasource.password=postgres
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=${SONG_DB_NAME}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./init-scripts/song-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
