@@ -16,4 +16,6 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=build /app/resource-service/build/libs/*.jar app.jar
 EXPOSE 8081
+EXPOSE 5005
+
 CMD ["java", "-jar", "app.jar"]
